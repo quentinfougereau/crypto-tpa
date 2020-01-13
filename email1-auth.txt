@@ -1,0 +1,19 @@
+Received: from 31.121.118.45 (EHLO serveur.fr)
+  by mta1007.mail.ukl.yahoo.com with SMTP; Fri, 21 Sep 2019 21:31:16 +0000
+Received: by serveur.fr (Postfix, from userid 106)
+  id 3DF2F15A0CD; Fri, 21 Sep 2019 23:31:16 +0200 (CEST)
+From: "Thomas Moore" <president@serveur.fr>
+To: yvon.pigeon@yahoo.fr
+Subject: Transfert d'argent urgent
+Date: Fri, 21 Sep 2019 23:31:16 +0200
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Content-Type: text/plain; charset=iso-8859-1
+X-Mailer: Mozilla Thunderbird
+Message-Id: <20190921212116.3DF2F16A0CD@serveur.fr>
+X-AUTH: 729404e8ad460075ba28dd975ffc980a
+
+Bonjour Yvon,
+Transferez 100 000 euros sur le compte IBAN
+FR7630056009271234567890182 des aujourd'hui.
+Thomas
