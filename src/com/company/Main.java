@@ -1,11 +1,14 @@
 package com.company;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Scanner;
 
 public class Main {
+
 
     public static void main(String[] args) {
         cert("./email1.txt");
@@ -14,105 +17,152 @@ public class Main {
 
     public static void cert(String filename) {
         try {
-            File file = new File(filename);
-            FileInputStream fis = new FileInputStream(file);
-            Scanner scanner = new Scanner(fis);
+            Reader reader = new Reader(filename);
             String line;
+
             boolean isHeader = true;
-            boolean isBody = false;
-            String header = "";
-            String body = "";
-            MessageDigest hash = MessageDigest.getInstance("MD5");
-            while (scanner.hasNextLine()) {
-                 line = scanner.nextLine();
-                 if (line.equals("")) {
-                     isHeader = false;
-                     isBody = true;
-                     continue;
-                 }
-                if (isHeader) {
-                    header += line + "\r\n";
+            StringBuilder header = new StringBuilder();
+            StringBuilder body = new StringBuilder();
+
+            while ((line = reader.readLine()) != null) {
+                if (line.equals("")) {
+                    isHeader = false;
+                    continue;
                 }
-                 if (isBody) {
-                     body += line + "\r\n";
-                 }
+                if (isHeader) {
+                    header.append(line).append("\r\n");
+                }
+                if (!isHeader) {
+                    body.append(line).append("\r\n");
+                }
             }
-            fis.close();
-            scanner.close();
+            reader.close();
 
-            System.out.println(header);
-            System.out.println(body);
+            /*
             String bodyWithSecret = body + "c5dcb78732e1f3966647655229729843";
-
+            MessageDigest hash = MessageDigest.getInstance("MD5");
             hash.update(bodyWithSecret.getBytes());
             byte[] resumeMD5 = hash.digest();
             System.out.print("Le résumé MD5 du fichier \"" + filename + "\" vaut: 0x");
-            StringBuffer stringBuffer = new StringBuffer();
-            for(byte k: resumeMD5) {
+            StringBuilder stringBuffer = new StringBuilder();
+            for (byte k : resumeMD5) {
                 System.out.printf("%02x", k);
                 stringBuffer.append(String.format("%02x", k));
             }
+            */
+            byte[] hmac = conformHmac("Alain Turin", body.toString());
+            String stringHmac = hexToStringFormat(hmac);
 
-            header += "X-AUTH: " + stringBuffer + "\r\n";
-            header += "\r\n";
+            header.append("X-AUTH: ").append(stringHmac).append("\r\n");
+            header.append("\r\n");
 
             FileWriter writer = new FileWriter("./email1-auth.txt");
-            writer.write(header);
-            writer.write(body);
+            writer.write(header.toString());
+            writer.write(body.toString());
             writer.flush();
             writer.close();
-        } catch (NoSuchAlgorithmException | IOException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
     }
 
     public static void check(String filename) {
-        try {
-            File file = new File(filename);
-            FileInputStream fis = new FileInputStream(file);
-            Scanner scanner = new Scanner(fis);
-            String line;
-            String certResumeMD5 = "";
-            boolean isBody = false;
-            String body = "";
-            while (scanner.hasNextLine()) {
-                line = scanner.nextLine();
-                if (line.contains("X-AUTH")) {
-                    certResumeMD5 = line.substring(line.indexOf(":") + 2);
-                }
-                if (line.equals("")) {
-                    isBody = true;
-                    continue;
-                }
-                if (isBody) {
-                    body += line + "\r\n";
-                }
+        Reader reader = new Reader(filename);
+        String certResumeMD5 = "";
+        String line;
+        boolean isBody = false;
+        StringBuilder body = new StringBuilder();
+        while ((line = reader.readLine()) != null) {
+            if (line.contains("X-AUTH")) {
+                certResumeMD5 = line.substring(line.indexOf(":") + 2);
             }
-
-            System.out.println(certResumeMD5);
-            System.out.println(body);
-
-            String bodyWithSecret = body + "c5dcb78732e1f3966647655229729843";
-            MessageDigest hash = MessageDigest.getInstance("MD5");
-            hash.update(bodyWithSecret.getBytes());
-            byte[] resumeMD5 = hash.digest();
-
-            StringBuffer stringBuffer = new StringBuffer();
-            for(byte k: resumeMD5) {
-                stringBuffer.append(String.format("%02x", k));
+            if (line.equals("")) {
+                isBody = true;
+                continue;
             }
-
-            if (certResumeMD5.contentEquals(stringBuffer)) {
-                System.out.println("Cet email est authentique");
-            } else {
-                System.out.println("[ALERTE] La signature de cet email ne correspond pas");
+            if (isBody) {
+                body.append(line).append("\r\n");
             }
+        }
+        reader.close();
 
-        } catch (FileNotFoundException | NoSuchAlgorithmException e) {
-            e.printStackTrace();
+        byte[] hmac = conformHmac("Alain Turin", body.toString());
+        String stringHmac = hexToStringFormat(hmac);
+
+        if (certResumeMD5.equals(stringHmac)) {
+            System.out.println("Cet email est authentique");
+        } else {
+            System.out.println("[ALERTE] La signature de cet email ne correspond pas");
         }
 
+    }
+
+    public static byte[] conformHmac(String value, String message) {
+        byte[] secret = getResumeMD5(value.getBytes());
+        byte[] extension = new byte[secret.length + 48];
+        byte[] ipad = new byte[secret.length + 48];
+        byte[] opad = new byte[secret.length + 48];
+
+        for (int i = 0; i < secret.length + 48; i++) {
+            if (i < secret.length) {
+                extension[i] = secret[i];
+            } else {
+                extension[i] = 0;
+            }
+            ipad[i] = 54; //0x36
+            opad[i] = 92; //0x5c
+        }
+
+        byte[] calculation1 = xor(extension, ipad);
+        byte[] calculation2 = getResumeMD5(bytesConcat(calculation1, message.getBytes()));
+        byte[] calculation3 = xor(extension, opad);
+
+        return getResumeMD5(bytesConcat(calculation3, calculation2));
+    }
+
+    public static byte[] getResumeMD5(byte[] value) {
+        byte[] resumeMD5 = null;
+        try {
+            MessageDigest hash = MessageDigest.getInstance("MD5");
+            hash.update(value);
+            resumeMD5 = hash.digest();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return resumeMD5;
+    }
+
+    public static void printBytes(byte[] bytes) {
+        for (byte b : bytes) {
+            System.out.printf("%02x", b);
+        }
+        System.out.println();
+    }
+
+    public static byte[] xor(byte[] op1, byte[] op2) {
+        byte[] res = new byte[op1.length];
+        if (op1.length == op2.length) {
+            for (int i = 0; i < op1.length; i++) {
+                res[i] = (byte) (op1[i] ^ op2[i]);
+            }
+        }
+        return res;
+    }
+
+    public static byte[] bytesConcat(byte[] first, byte[] second) {
+        byte[] res = new byte[first.length + second.length];
+        System.arraycopy(first, 0, res, 0, first.length);
+        System.arraycopy(second, 0, res, first.length, second.length);
+        return res;
+    }
+
+    public static String hexToStringFormat(byte[] bytes) {
+        StringBuilder stringBuilder = new StringBuilder();
+        for (byte b : bytes) {
+            stringBuilder.append(String.format("%02x", b));
+        }
+        return stringBuilder.toString();
     }
 
 }
