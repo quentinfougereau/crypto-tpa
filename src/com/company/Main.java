@@ -10,6 +10,7 @@ public class Main {
     public static void main(String[] args) {
         cert("./email1.txt");
         check("./email1-auth.txt");
+        //testHmac("Jefe", "what do ya want for nothing?");
     }
 
     public static void cert(String filename) {
@@ -47,7 +48,7 @@ public class Main {
                 stringBuffer.append(String.format("%02x", k));
             }
             */
-            byte[] hmac = conformHmac("Alain Turin", body.toString());
+            byte[] hmac = conformHmac("Alain Turin".getBytes(), body.toString());
             String stringHmac = hexToStringFormat(hmac);
 
             header.append("X-AUTH: ").append(stringHmac).append("\r\n");
@@ -84,7 +85,7 @@ public class Main {
         }
         reader.close();
 
-        byte[] hmac = conformHmac("Alain Turin", body.toString());
+        byte[] hmac = conformHmac("Alain Turin".getBytes(), body.toString());
         String stringHmac = hexToStringFormat(hmac);
 
         if (certResumeMD5.equals(stringHmac)) {
@@ -95,8 +96,8 @@ public class Main {
 
     }
 
-    public static byte[] conformHmac(String value, String message) {
-        byte[] secret = getResumeMD5(value.getBytes());
+    public static byte[] conformHmac(byte[] value, String message) {
+        byte[] secret = getResumeMD5(value);
         byte[] extension = new byte[secret.length + 48];
         byte[] ipad = new byte[secret.length + 48];
         byte[] opad = new byte[secret.length + 48];
@@ -107,23 +108,29 @@ public class Main {
             } else {
                 extension[i] = 0;
             }
-            ipad[i] = 54; //0x36
-            opad[i] = 92; //0x5c
+            ipad[i] = 0x36; //0x36
+            opad[i] = 0x5c; //0x5c
         }
 
         byte[] calculation1 = xor(extension, ipad);
-        byte[] calculation2 = getResumeMD5(bytesConcat(calculation1, message.getBytes()));
+        byte[] calculation15 = bytesConcat(calculation1, message.getBytes());
+        byte[] calculation2 = getResumeMD5(calculation15);
         byte[] calculation3 = xor(extension, opad);
-
-        return getResumeMD5(bytesConcat(calculation3, calculation2));
+        byte[] calculation4 = bytesConcat(calculation3, calculation2);
+        return getResumeMD5(calculation4);
     }
 
     public static byte[] getResumeMD5(byte[] value) {
         byte[] resumeMD5 = null;
         try {
+            System.out.println("Sans MD5 : ");
+            printBytes(value);
+            System.out.println("Longueur de value = " + value.length);
             MessageDigest hash = MessageDigest.getInstance("MD5");
             hash.update(value);
             resumeMD5 = hash.digest();
+            System.out.println("Avec MD5 = ");
+            printBytes(resumeMD5);
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         }
@@ -160,6 +167,23 @@ public class Main {
             stringBuilder.append(String.format("%02x", b));
         }
         return stringBuilder.toString();
+    }
+
+    public static byte[] hexStringToByte(String s) {
+        byte[] bytes = new byte[s.length() / 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int index = i * 2;
+            int j = Integer.parseInt(s.substring(index, index + 2), 16);
+            bytes[i] = (byte) j;
+        }
+        return bytes;
+    }
+
+    public static void testHmac(String secret, String message) {
+        //byte[] byteSecret = hexStringToByte(secret);
+        byte[] byteSecret = secret.getBytes();
+        byte[] h = conformHmac(byteSecret, message);
+        printBytes(h);
     }
 
 }
