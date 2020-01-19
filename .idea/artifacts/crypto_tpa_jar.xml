@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="crypto-tpa:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/crypto_tpa_jar</output-path>
+    <root id="archive" name="crypto-tpa.jar">
+      <element id="module-output" name="crypto-tpa" />
+    </root>
+  </artifact>
+</component>
